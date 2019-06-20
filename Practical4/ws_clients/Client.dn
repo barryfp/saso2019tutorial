@@ -1,0 +1,41 @@
+const int STAT_TIMER_INTERVAL = 1024
+const int RECV_BUF_SIZE = 1000
+
+const char SERVER_ADDRESS[] = "localhost"
+const int SERVER_PORT = 2012
+
+uses data.String
+
+component provides App requires io.Output out, data.IntUtil iu, net.TCPSocket, time.Timer timer, time.Calendar calendar {
+	int bytesReceived
+	int filesReceived
+	
+	void statTimer() {
+		while (true) {
+			timer.sleep(STAT_TIMER_INTERVAL)
+			out.println("bytes received in last second: $(iu.intToString(bytesReceived)) | files: $(iu.intToString(filesReceived))")
+			bytesReceived = 0
+			filesReceived = 0
+		}
+	}
+	
+	void makeRequest(char path[]) {
+		DateTime start = calendar.getTime()
+		char req[] = new char[]("GET ", path, " HTTP/1.0\r\n\r\n")
+		TCPSocket s = new TCPSocket()
+		if (!s.connect(SERVER_ADDRESS, SERVER_PORT)) { out.println("Error while trying to connect to server $(SERVER_ADDRESS) - $(iu.intToString(SERVER_PORT))") } 
+		s.send(req)
+		byte resp[] = null
+		while ((resp = s.recv(RECV_BUF_SIZE)).arrayLength > 0) { bytesReceived += resp.arrayLength }
+		s.disconnect()
+		filesReceived ++
+	}
+	
+	int App:main(AppParam params[]) {
+		char resource[] = "/"
+		out.println("Requesting file $(resource)")
+		asynch::statTimer()
+		while(true) { makeRequest(resource) }
+		return 0
+	}
+}

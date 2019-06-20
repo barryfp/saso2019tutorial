@@ -1,0 +1,76 @@
+uses data.String
+
+const char debugMSG[] = "[@Learner]"
+
+const char IP[] = "localhost"
+const int PORT 	= 2011 
+
+data Metric {
+	char name[]
+	char config[]
+	char source[]
+	dec value
+	int count
+	bool preferHigh
+	char startTime[]
+	char endTime[]
+}
+
+data Event {
+	char name[]
+	char source[]
+	dec value
+	int count
+	char startTime[]
+	char endTime[]
+}
+
+//perception data
+data PData {
+	Metric metrics[]
+	Event events[]
+}
+
+const int OBSERVATION_WINDOW = 5000
+
+/* YOU SHOULD CHANGE THESE VALUES TOO */
+const dec HIGHEST_COST = 0.9
+const dec LOWEST_COST = 0.1
+const dec EXPLORATION_PENALTY = 10.0
+
+
+component provides App requires io.Output out, rest.RESys, time.Timer t, data.DecUtil du, 
+	data.IntUtil iu, ml.rl.RL ucb, data.json.JSONEncoder encoder {
+
+	dec costToReward(dec cost) {
+		dec reward = 0
+		//TODO...
+		return reward
+	}
+
+	int App:main(AppParam param[]) {
+		RESys sys = new RESys(IP, PORT)
+		out.println("Setting main...")
+		sys.setMain("../repository/TCPNetwork.o")
+		out.println("Adding proxy...")
+		sys.addProxy("|../pal/monitoring/proxies/HTTPProxy.o|*(*:http.handler.GET.HTTPGET[0]:*)|")
+		String actions[] = sys.getAllConfigs()
+		ucb.setExplorationPenalty(EXPLORATION_PENALTY)
+		ucb.setActions(actions)
+		while (true) {
+			int action = ucb.getAction()
+			dec reward = 0.0
+			dec cost = 0.0
+			sys.setConfig(actions[action].string)
+			t.sleep(OBSERVATION_WINDOW)
+			PData pData = encoder.jsonToData(sys.getPerceptionData(), typeof(PData), null)
+			if (pData.metrics[0].count > 0.0) {
+				cost = pData.metrics[0].value / pData.metrics[0].count
+				reward = costToReward(cost)
+				ucb.consumeData(reward)
+			}
+			out.println("$(debugMSG) action: $(iu.intToString(action)), reward: $(du.decToString(reward)), cost: $(du.decToString(cost))")
+		}
+		return 0
+	}
+}
